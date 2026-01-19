@@ -1,2 +1,2 @@
-# tecomat-foxtrot-hass
+# Tecomat Foxtrot
 Tecomat Foxtrot (Home Assistant)

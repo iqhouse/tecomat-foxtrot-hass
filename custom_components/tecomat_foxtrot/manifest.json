@@ -2,9 +2,11 @@
   "domain": "tecomat_foxtrot",
   "name": "Tecomat Foxtrot",
   "version": "0.8.2",
-  "documentation": "https://iqhouse.sk",
+  "documentation": "https://github.com/iqhouse/tecomat-foxtrot-hass#readme",
+  "issue_tracker": "https://github.com/iqhouse/tecomat-foxtrot-hass/issues",
+  "codeowners": ["@iqhouse"],
   "requirements": [],
-  "codeowners": ["@Michal Repka"],
+  "dependencies": [],
   "config_flow": true,
   "iot_class": "local_push"
 }

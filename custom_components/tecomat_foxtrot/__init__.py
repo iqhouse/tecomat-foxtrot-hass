@@ -8,6 +8,7 @@ from homeassistant.helpers import device_registry as dr
 
 from .const import DOMAIN
 from .plccoms import PLCComSClient
+from .event import async_setup_entry as async_setup_event_entry
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -32,7 +33,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Prvotné pripojenie pre načítanie zoznamu premenných
     await client.async_connect()
     
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = client
+    # Uložíme client do hass.data v dict štruktúre
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"client": client}
 
     # Registrácia zariadenia v Device Registry
     device_registry = dr.async_get(hass)
@@ -45,6 +47,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    
+    # Button event entity sa pridávajú priamo v sensor.py spolu so senzormi
     
     # Registrácia callbacku pre detekciu reštartu PLC
     async def on_plc_restart():
@@ -59,7 +63,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    client = hass.data[DOMAIN][entry.entry_id]
+    entry_data = hass.data[DOMAIN][entry.entry_id]
+    client = entry_data["client"]
     await client.async_disconnect()
     
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

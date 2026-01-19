@@ -12,7 +12,8 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up the Foxtrot cover platform."""
-    client = hass.data[DOMAIN][entry.entry_id]
+    entry_data = hass.data[DOMAIN][entry.entry_id]
+    client = entry_data["client"]
     entities = []
 
     for var in client.variables:

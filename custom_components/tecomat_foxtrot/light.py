@@ -19,7 +19,8 @@ DEFAULT_MAX_KELVIN = 6500
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Nastavenie platformy svetiel pre Tecomat Foxtrot."""
-    client = hass.data[DOMAIN][entry.entry_id]
+    entry_data = hass.data[DOMAIN][entry.entry_id]
+    client = entry_data["client"]
     entities = []
 
     for var in client.variables:

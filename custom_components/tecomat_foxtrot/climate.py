@@ -18,7 +18,8 @@ from .const import DOMAIN, THERMOSTAT_BASE
 _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities):
-    client = hass.data[DOMAIN][entry.entry_id]
+    entry_data = hass.data[DOMAIN][entry.entry_id]
+    client = entry_data["client"]
     entities = []
     
     _LOGGER.debug("Hľadanie termostatov medzi %d premennými", len(client.variables))

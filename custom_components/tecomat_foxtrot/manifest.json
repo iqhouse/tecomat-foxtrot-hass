@@ -1,7 +1,7 @@
 {
   "domain": "tecomat_foxtrot",
   "name": "Tecomat Foxtrot",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "documentation": "https://iqhouse.sk",
   "requirements": [],
   "codeowners": ["@Michal Repka"],

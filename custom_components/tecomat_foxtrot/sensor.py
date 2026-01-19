@@ -26,7 +26,8 @@ def _slugify_plc_id(plc_id: str) -> str:
     return s
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities):
-    client = hass.data[DOMAIN][entry.entry_id]
+    entry_data = hass.data[DOMAIN][entry.entry_id]
+    client = entry_data["client"]
     entities: list[SensorEntity] = []
 
     # Senzory z DISPLAY blokov
@@ -77,6 +78,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
             entities.append(TecomatCOSensor(**common_args))
 
     async_add_entities(entities)
+    
+    # Pridáme aj button event entity
+    from .event import async_setup_entry as async_setup_event_entry
+    await async_setup_event_entry(hass, entry, async_add_entities)
 
 class _TecomatRealPushSensor(SensorEntity):
     _ROUND_N: int | None = None

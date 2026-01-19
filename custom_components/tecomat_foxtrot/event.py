@@ -192,6 +192,7 @@ class TecomatButtonSensor(SensorEntity):
         attrs = {
             "plc_base": self._plc_base,
             "sensor_type": self._sensor_type,
+            "count": self._attr_native_value,  # Počet stlačení
         }
         if self._last_change_time:
             attrs["last_change"] = self._last_change_time.isoformat()

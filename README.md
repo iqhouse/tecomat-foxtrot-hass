@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Tecomat Foxtrot Home Assistant Integration
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
@@ -176,3 +177,7 @@ Ing. Michal Repka (iQ House, s.r.o.)
 ---
 
 **Poznámka**: Táto integrácia nie je oficiálne podporovaná spoločnosťou Teco a.s. Je to neoficiálna komunita podporovaná integrácia.
+=======
+# Tecomat Foxtrot
+Tecomat Foxtrot (Home Assistant)
+>>>>>>> b2933c8f98e2aa8467d60dc653e3d7dce57de1d8

@@ -1,2 +1,2 @@
 # tecomat-foxtrot-hass
-Tecomat Foxtrot (Home Assiatant)
+Tecomat Foxtrot (Home Assistant)

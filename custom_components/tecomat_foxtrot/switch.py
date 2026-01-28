@@ -1,4 +1,3 @@
-"""Switch platform for Tecomat Foxtrot."""
 import asyncio
 from homeassistant.components.switch import SwitchEntity
 from .const import DOMAIN, SOCKET_BASE
@@ -47,3 +46,6 @@ class TecomatSwitch(SwitchEntity):
 
     async def async_turn_on(self, **kwargs): await self._client.async_set(self._state_var, "1")
     async def async_turn_off(self, **kwargs): await self._client.async_set(self._state_var, "0")
+    
+    async def async_will_remove_from_hass(self) -> None:
+        self._client.unregister_value_entity(self._state_var)

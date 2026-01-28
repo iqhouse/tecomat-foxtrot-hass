@@ -1,4 +1,3 @@
-"""Binary sensor platform for Tecomat Foxtrot."""
 import asyncio
 from homeassistant.components.binary_sensor import BinarySensorEntity
 from .const import DOMAIN, CONTACT_BASE

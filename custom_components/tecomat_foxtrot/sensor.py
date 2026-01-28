@@ -1,7 +1,5 @@
-"""Sensor platform for Tecomat Foxtrot (PLCComS)."""
 from __future__ import annotations
 import asyncio
-import logging
 import re
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.const import UnitOfTemperature
@@ -13,8 +11,6 @@ from .const import (
     SENSOR_DISPLAY_SYMBOL_HUMIDITY, SENSOR_DISPLAY_SYMBOL_GENERIC,
     SENSOR_DISPLAY_TYPE_REAL,
 )
-
-_LOGGER = logging.getLogger(__name__)
 
 def _to_float(raw: str) -> float:
     return float(raw.strip().replace(",", "."))
@@ -30,7 +26,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     client = entry_data["client"]
     entities: list[SensorEntity] = []
 
-    # Senzory z DISPLAY blokov
     for value_var in client.variables:
         if not value_var.lower().endswith(f"{DISP.lower()}_value"):
             continue
@@ -59,12 +54,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         }
 
         if symbol == SENSOR_DISPLAY_SYMBOL_GENERIC:
-            # Pre symbol=0 načítame precision z PLC
             try:
                 precision_raw = await client.async_get(f"{base}.{DISP}_PRECISION")
                 precision = int(_to_float(precision_raw))
             except Exception:
-                precision = 0  # Default precision
+                precision = 0
             entities.append(TecomatGenericDisplaySensor(**common_args, precision=precision))
         elif symbol == SENSOR_DISPLAY_SYMBOL_TEMP:
             entities.append(TecomatTemperatureSensor(**common_args))
@@ -79,7 +73,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
     async_add_entities(entities)
     
-    # Pridáme aj button event entity
     from .event import async_setup_entry as async_setup_event_entry
     await async_setup_event_entry(hass, entry, async_add_entities)
 
@@ -96,7 +89,6 @@ class _TecomatRealPushSensor(SensorEntity):
         self._attr_native_value = round(initial_value, self._ROUND_N) if self._ROUND_N is not None else initial_value
         self._attr_native_unit_of_measurement = unit
         self._attr_state_class = SensorStateClass.MEASUREMENT
-        # Priradenie k zariadeniu
         self._attr_device_info = {"identifiers": {(DOMAIN, entry_id)}}
         self._client.register_value_entity(self._value_var, self._on_diff_value)
 
@@ -140,7 +132,6 @@ class TecomatCOSensor(_TecomatRealPushSensor):
     _ROUND_N = 0
 
 class TecomatGenericDisplaySensor(SensorEntity):
-    """Sensor pre všeobecný DISPLAY senzor so symbol=0 a precision z PLC."""
     _attr_should_poll = False
 
     def __init__(self, name, client, plc_base, suggested_entity_id, value_var, unit, initial_value, entry_id, precision):
@@ -153,7 +144,6 @@ class TecomatGenericDisplaySensor(SensorEntity):
         self._attr_native_value = round(initial_value, self._precision)
         self._attr_native_unit_of_measurement = unit
         self._attr_state_class = SensorStateClass.MEASUREMENT
-        # Priradenie k zariadeniu
         self._attr_device_info = {"identifiers": {(DOMAIN, entry_id)}}
         self._client.register_value_entity(self._value_var, self._on_diff_value)
 

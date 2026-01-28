@@ -1,5 +1,3 @@
-"""Config flow for Tecomat Foxtrot."""
-
 import asyncio
 import voluptuous as vol
 from homeassistant import config_entries
@@ -18,7 +16,6 @@ class TecomatFoxtrotConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             host = user_input[CONF_HOST]
             port = user_input[CONF_PORT]
 
-            # Validate connection with timeout to avoid UI hang.
             client = PLCComSClient(self.hass, host, port)
             try:
                 await asyncio.wait_for(client.async_connect(list_only=True), timeout=5)

@@ -1,6 +1,4 @@
-"""Climate platform for Tecomat Foxtrot."""
 from __future__ import annotations
-import logging
 from typing import Any
 
 from homeassistant.components.climate import (
@@ -15,59 +13,48 @@ from homeassistant.config_entries import ConfigEntry
 
 from .const import DOMAIN, THERMOSTAT_BASE
 
-_LOGGER = logging.getLogger(__name__)
-
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities):
     entry_data = hass.data[DOMAIN][entry.entry_id]
     client = entry_data["client"]
     entities = []
-    
-    _LOGGER.debug("Hľadanie termostatov medzi %d premennými", len(client.variables))
 
     for var in client.variables:
-        # Identifikácia termostatu cez type premennú
         if not var.lower().endswith(f"{THERMOSTAT_BASE.lower()}_type"):
             continue
 
         base = var.rsplit("_", 1)[0]
         plc_base = base.rsplit(f"_{THERMOSTAT_BASE}", 1)[0] if THERMOSTAT_BASE in base.upper() else base
-        _LOGGER.debug("Nájdený termostat: %s (base: %s, plc_base: %s)", var, base, plc_base)
         
         try:
-            # Načítanie typu termostatu (1=COOL, 2=HEAT, 3=HEAT+COOL)
             t_type_raw = await client.async_get(var)
             t_type = int(t_type_raw.strip())
             
             if t_type not in (1, 2, 3):
-                _LOGGER.debug("Preskakujem termostat %s, nepodporovaný typ: %s", base, t_type)
                 continue
 
-            # Načítanie základných údajov
             name = (await client.async_get(f"{base}_name")).strip() or plc_base
             current_temp = float((await client.async_get(f"{base}_meastemp")).replace(",", "."))
             min_temp = float((await client.async_get(f"{base}_mintemp")).replace(",", "."))
             max_temp = float((await client.async_get(f"{base}_maxtemp")).replace(",", "."))
             
-            # Načítanie počiatočného stavu režimu a aktivity
-            if t_type == 1: # COOL
+            if t_type == 1:
                 target_temp = float((await client.async_get(f"{base}_setpoint")).replace(",", "."))
                 is_on = (await client.async_get(f"{base}_coolmode")).strip() in ("1", "true", "TRUE")
                 is_active = (await client.async_get(f"{base}_cool")).strip() in ("1", "true", "TRUE")
                 auto_mode = False
                 heat_active = False
-            elif t_type == 2: # HEAT
+            elif t_type == 2:
                 target_temp = float((await client.async_get(f"{base}_setpoint")).replace(",", "."))
                 is_on = (await client.async_get(f"{base}_heatmode")).strip() in ("1", "true", "TRUE")
                 is_active = (await client.async_get(f"{base}_heat")).strip() in ("1", "true", "TRUE")
                 auto_mode = False
                 heat_active = False
-            else: # t_type == 3 - HEAT+COOL (kombinovaný)
+            else:
                 target_temp = float((await client.async_get(f"{base}_setpoint")).replace(",", "."))
                 heat_mode = (await client.async_get(f"{base}_heatmode")).strip() in ("1", "true", "TRUE")
                 cool_mode = (await client.async_get(f"{base}_coolmode")).strip() in ("1", "true", "TRUE")
                 heat_active = (await client.async_get(f"{base}_heat")).strip() in ("1", "true", "TRUE")
                 cool_active = (await client.async_get(f"{base}_cool")).strip() in ("1", "true", "TRUE")
-                # Určenie HVAC režimu pre typ 3 (len HEAT alebo COOL alebo OFF)
                 if heat_mode:
                     is_on = True
                     is_active = heat_active
@@ -78,20 +65,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
                     is_on = False
                     is_active = False
 
-            # Predanie stavov pre typ 3
             entities.append(TecomatThermostat(
                 name, client, plc_base, base, t_type,
                 target_temp, current_temp, min_temp, max_temp, 
-                is_on, is_active, False, heat_active,  # auto_mode sa už nepoužíva
+                is_on, is_active, False, heat_active,
                 heat_mode if t_type == 3 else False,
                 cool_mode if t_type == 3 else False,
                 entry.entry_id
             ))
         except Exception as e:
-            _LOGGER.error("Error adding thermostat %s: %s", var, e)
             continue
 
-    _LOGGER.info("Načítaných termostatov: %d", len(entities))
     async_add_entities(entities)
 
 class TecomatThermostat(ClimateEntity):
@@ -101,7 +85,7 @@ class TecomatThermostat(ClimateEntity):
     def __init__(self, name, client, plc_base, base, t_type, target, current, min_t, max_t, is_on, is_active, auto_mode, heat_active, heat_mode_state, cool_mode_state, entry_id):
         self._client = client
         self._base = base
-        self._type = t_type # 1 = COOL, 2 = HEAT, 3 = HEAT+COOL
+        self._type = t_type
         
         self._attr_name = name
         self._attr_unique_id = f"{DOMAIN}:{plc_base}_thermostat"
@@ -113,9 +97,7 @@ class TecomatThermostat(ClimateEntity):
         self._attr_min_temp = min_t
         self._attr_max_temp = max_t
 
-        # Dynamické priradenie premenných podľa typu
         if self._type == 1:
-            # Typ 1: Len chladenie
             self._attr_hvac_modes = [HVACMode.COOL, HVACMode.OFF]
             self._attr_icon = "mdi:snowflake"
             self._mode_var = f"{base}_coolmode"
@@ -125,7 +107,6 @@ class TecomatThermostat(ClimateEntity):
             self._heat_var = None
             self._attr_hvac_mode = HVACMode.COOL if is_on else HVACMode.OFF
         elif self._type == 2:
-            # Typ 2: Len kúrenie
             self._attr_hvac_modes = [HVACMode.HEAT, HVACMode.OFF]
             self._attr_icon = "mdi:thermometer-lines"
             self._mode_var = f"{base}_heatmode"
@@ -135,44 +116,37 @@ class TecomatThermostat(ClimateEntity):
             self._heat_var = None
             self._attr_hvac_mode = HVACMode.HEAT if is_on else HVACMode.OFF
         else:
-            # Typ 3: Kúrenie + chladenie (kombinovaný) - len HEAT, COOL, OFF
             self._attr_hvac_modes = [HVACMode.HEAT, HVACMode.COOL, HVACMode.OFF]
             self._attr_icon = "mdi:thermometer-auto"
             self._mode_var = f"{base}_coolmode"
-            self._automode_var = None  # Už sa nepoužíva
+            self._automode_var = None
             self._heatmode_var = f"{base}_heatmode"
             self._heat_var = f"{base}_heat"
             self._active_var = f"{base}_cool"
-            # Sledovanie aktuálnych stavov pre typ 3
-            self._auto_mode_state = False  # Už sa nepoužíva
+            self._auto_mode_state = False
             self._heat_mode_state = heat_mode_state if t_type == 3 else False
             self._cool_mode_state = cool_mode_state if t_type == 3 else False
             self._heat_active_state = heat_active if t_type == 3 else False
             self._cool_active_state = is_active if t_type == 3 else False
-            # Určenie počiatočného HVAC režimu (len HEAT, COOL alebo OFF)
             if is_on:
                 self._attr_hvac_mode = HVACMode.HEAT if heat_mode_state else HVACMode.COOL
             else:
                 self._attr_hvac_mode = HVACMode.OFF
 
-        # Počiatočné nastavenie akcie
         self._update_hvac_action(is_active, heat_active)
 
-        # Registrácia callbackov pre push updates
         self._client.register_value_entity(f"{base}_setpoint", self._on_diff_setpoint)
         self._client.register_value_entity(f"{base}_meastemp", self._on_diff_meas)
         self._client.register_value_entity(self._mode_var, self._on_diff_mode)
         self._client.register_value_entity(self._active_var, self._on_diff_active)
         if self._type == 3:
-            # Pre typ 3 sledujeme aj heatmode a heat premenné
             self._client.register_value_entity(self._heatmode_var, self._on_diff_heatmode)
             self._client.register_value_entity(self._heat_var, self._on_diff_heat)
 
     def _update_hvac_action(self, cool_active, heat_active=False):
-        """Určuje, či sa reálne kúri/chladí alebo je systém v IDLE stave."""
         if self._attr_hvac_mode == HVACMode.OFF:
             self._attr_hvac_action = HVACAction.OFF
-        elif self._type == 3:  # HEAT+COOL (len HEAT, COOL, OFF)
+        elif self._type == 3:
             if self._attr_hvac_mode == HVACMode.HEAT:
                 self._attr_hvac_action = HVACAction.HEATING if heat_active else HVACAction.IDLE
             elif self._attr_hvac_mode == HVACMode.COOL:
@@ -202,7 +176,7 @@ class TecomatThermostat(ClimateEntity):
             self._attr_hvac_mode = HVACMode.COOL if is_on else HVACMode.OFF
         elif self._type == 2:
             self._attr_hvac_mode = HVACMode.HEAT if is_on else HVACMode.OFF
-        else:  # typ 3
+        else:
             self._cool_mode_state = is_on
             self._update_hvac_mode_type3()
         self.async_write_ha_state()
@@ -217,7 +191,6 @@ class TecomatThermostat(ClimateEntity):
         self.async_write_ha_state()
 
     def _on_diff_heatmode(self, value):
-        """Callback pre zmenu heatmode pre typ 3."""
         if self._type != 3:
             return
         self._heat_mode_state = value.strip() in ("1", "true", "TRUE")
@@ -225,7 +198,6 @@ class TecomatThermostat(ClimateEntity):
         self.async_write_ha_state()
 
     def _on_diff_heat(self, value):
-        """Callback pre zmenu heat aktivity pre typ 3."""
         if self._type != 3:
             return
         self._heat_active_state = value.strip() in ("1", "true", "TRUE")
@@ -233,10 +205,8 @@ class TecomatThermostat(ClimateEntity):
         self.async_write_ha_state()
 
     def _update_hvac_mode_type3(self):
-        """Aktualizácia HVAC režimu pre typ 3 na základe stavu premenných (len HEAT, COOL, OFF)."""
         if self._type != 3:
             return
-        # Určenie HVAC režimu na základe stavu premenných
         if self._heat_mode_state:
             self._attr_hvac_mode = HVACMode.HEAT
         elif self._cool_mode_state:
@@ -245,9 +215,7 @@ class TecomatThermostat(ClimateEntity):
             self._attr_hvac_mode = HVACMode.OFF
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
-        """Nastavenie HVAC režimu."""
         if self._type == 3:
-            # Pre typ 3 nastavíme heatmode a coolmode (bez automode)
             if hvac_mode == HVACMode.OFF:
                 await self._client.async_set(self._heatmode_var, "0")
                 await self._client.async_set(self._mode_var, "0")
@@ -258,17 +226,14 @@ class TecomatThermostat(ClimateEntity):
                 await self._client.async_set(self._heatmode_var, "0")
                 await self._client.async_set(self._mode_var, "1")
         else:
-            # Pre typ 1 a 2 jednoduché zapnutie/vypnutie
             on_val = "1" if hvac_mode != HVACMode.OFF else "0"
             await self._client.async_set(self._mode_var, on_val)
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
-        """Set new target temperature."""
         if (temp := kwargs.get(ATTR_TEMPERATURE)) is not None:
             await self._client.async_set(f"{self._base}_setpoint", f"{temp:.1f}")
 
     async def async_will_remove_from_hass(self) -> None:
-        """Odhlásenie všetkých callbackov."""
         self._client.unregister_value_entity(f"{self._base}_setpoint")
         self._client.unregister_value_entity(f"{self._base}_meastemp")
         self._client.unregister_value_entity(self._mode_var)

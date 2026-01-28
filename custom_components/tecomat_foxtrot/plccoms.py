@@ -1,8 +1,6 @@
-"""PLCComS TCP client (v0.4.5)"""
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import Callable
 
 from .const import (
@@ -11,8 +9,6 @@ from .const import (
     RECONNECT_MAX_DELAY,
     ENCODING,
 )
-
-_LOGGER = logging.getLogger(__name__)
 
 ValueCallback = Callable[[str], None]
 RestartCallback = Callable[[], None]
@@ -32,7 +28,7 @@ class PLCComSClient:
         self._stop_event = asyncio.Event()
         self._connected = False
         self._subscribed = False
-        self._plc_run_state = None  # Sledovanie stavu __PLC_RUN
+        self._plc_run_state = None
 
     async def async_connect(self, list_only: bool = False) -> None:
         self.reader, self.writer = await asyncio.open_connection(self.host, self.port)
@@ -69,7 +65,6 @@ class PLCComSClient:
         self._diff_callbacks.pop(var_name.lower(), None)
 
     def register_restart_callback(self, callback: RestartCallback) -> None:
-        """Registrácia callbacku pre detekciu reštartu PLC."""
         self._restart_callback = callback
 
     async def _send(self, msg: str) -> None:
@@ -102,7 +97,6 @@ class PLCComSClient:
         return value.strip().strip('"')
 
     async def async_set(self, var_name: str, value: str) -> None:
-        """Odoslanie príkazu SET do PLC."""
         await self._send(f"SET:{var_name},{value}")
 
     async def async_subscribe(self) -> None:
@@ -126,41 +120,30 @@ class PLCComSClient:
                     var_lower = var.lower()
                     value_stripped = value.strip()
                     
-                    # Detekcia reštartu PLC cez __PLC_RUN premennú
                     if var_lower == "__plc_run":
                         try:
                             plc_run_value = int(value_stripped)
-                            # Detekcia reštartu: hodnota sa zmení z 0 na 1
                             if self._plc_run_state == 0 and plc_run_value == 1:
-                                _LOGGER.info("Detekovaný reštart PLC (__PLC_RUN: 0 -> 1)")
-                                # Počkať chvíľu, aby PLC dokončilo reštart
                                 await asyncio.sleep(2)
-                                # Znovu načítať zoznam premenných
                                 await self._reload_variables()
-                                # Zavolať callback pre re-load entít
                                 if self._restart_callback:
                                     self.hass.async_create_task(self._restart_callback())
                             self._plc_run_state = plc_run_value
                         except (ValueError, TypeError):
                             pass
                     
-                    # Volanie callbacku pre premennú
                     cb = self._diff_callbacks.get(var_lower)
                     if cb: 
                         cb(value_stripped)
             except Exception as exc:
-                _LOGGER.warning("PLCComS reconnect: %s", exc)
                 await asyncio.sleep(delay)
                 delay = min(int(delay * 1.6), RECONNECT_MAX_DELAY)
                 self._connected = False
                 self._subscribed = False
 
     async def _reload_variables(self) -> None:
-        """Znovu načítať zoznam premenných z PLC."""
         try:
-            _LOGGER.debug("Znovu načítavam zoznam premenných z PLC")
             await self._send("LIST:")
             await self._read_list()
-            _LOGGER.info("Načítaný zoznam premenných: %d premenných", len(self.variables))
         except Exception as exc:
-            _LOGGER.error("Chyba pri znovu načítaní premenných: %s", exc)
+            pass

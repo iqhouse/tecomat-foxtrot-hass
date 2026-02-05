@@ -1,9 +1,10 @@
 {
   "domain": "tecomat_foxtrot",
   "name": "Tecomat Foxtrot",
-  "codeowners": ["@iqhouse"],
+  "version": "0.9.9",
+  "documentation": "https://iqhouse.sk",
+  "requirements": [],
+  "codeowners": ["@Michal Repka"],
   "config_flow": true,
-  "documentation": "https://github.com/iqhouse/tecomat-foxtrot-hass",
-  "iot_class": "local_polling",
-  "version": "0.9.7"
+  "iot_class": "local_push"
 }

@@ -18,6 +18,7 @@ class TecomatFoxtrotConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             client = PLCComSClient(self.hass, host, port)
             try:
+                # teraz je to rýchly connect test (bez LIST)
                 await asyncio.wait_for(client.async_connect(list_only=True), timeout=5)
             except Exception:
                 errors["base"] = "cannot_connect"

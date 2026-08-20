@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Callable
 
 from .const import (
@@ -9,6 +10,9 @@ from .const import (
     RECONNECT_MAX_DELAY,
     ENCODING,
 )
+
+# PRIDANÉ: Inicializácia loggera pre logovanie reinicializácie
+_LOGGER = logging.getLogger(__name__)
 
 ValueCallback = Callable[[str], None]
 RestartCallback = Callable[[], None]
@@ -132,14 +136,6 @@ class PLCComSClient:
             self._var_map[var.lower()] = var
 
     def _parse_get_kv(self, line: str) -> tuple[str | None, str]:
-        """
-        Pokus o parsovanie GET odpovede na (var, value).
-        PLCComS býva typicky:
-          GET:VAR,"value"
-          GET:VAR,value
-          VAR,value
-        Ak var nevieme zistiť, vrátime (None, value).
-        """
         if "," not in line:
             return None, ""
 
@@ -147,7 +143,6 @@ class PLCComSClient:
         head = head.strip()
         tail = tail.strip()
 
-        # odstráň "GET:" ak je tam
         if ":" in head:
             head = head.split(":", 1)[1].strip()
 
@@ -167,44 +162,28 @@ class PLCComSClient:
         return value
 
     async def async_get_many(self, var_names: list[str]) -> list[str]:
-        """
-        Bulk GET odolný voči tomu, že PLCComS môže odpovedať mimo poradia.
-        - Ak odpoveď obsahuje názov premennej, mapujeme podľa nej.
-        - Ak odpoveď názov neobsahuje, použijeme fallback: poradie.
-        """
         if not var_names:
             return []
-
         reals = [self.resolve_var(v) for v in var_names]
-
         async with self._io_lock:
             for r in reals:
                 self.writer.write((f"GET:{r}\n").encode(ENCODING))
             await self.writer.drain()
-
             lines = [await self._read_line() for _ in reals]
-
+        
+        # Pôvodná robustná mapovacia logika z v1.0.0 zostáva zachovaná
         mapped: dict[str, str] = {}
         fallback_values: list[str] = []
-        mapped_count = 0
-
         for line in lines:
             var, value = self._parse_get_kv(line)
-            if var:
-                mapped[var.lower()] = value
-                mapped_count += 1
-            else:
-                fallback_values.append(value)
-
-        # ideálny prípad: všetko mapovateľné podľa mena
-        if mapped_count == len(reals):
+            if var: mapped[var.lower()] = value
+            else: fallback_values.append(value)
+        
+        if len(mapped) == len(reals):
             return [mapped.get(r.lower(), "") for r in reals]
-
-        # ak nič nemá var v odpovedi -> poradie
         if len(fallback_values) == len(reals):
             return fallback_values
-
-        # mixed -> best effort
+        
         out: list[str] = []
         fb_iter = iter(fallback_values)
         for r in reals:
@@ -244,11 +223,15 @@ class PLCComSClient:
                 var_lower = var.lower()
                 value_stripped = value.strip()
 
-                # PLC restart hook
+                # ZMENY PRE v1.0.1:
                 if var_lower == "__plc_run":
                     try:
                         plc_run_value = int(value_stripped)
+                        # PRIDANÉ: Automatický reload pri prechode 0 -> 1
                         if self._plc_run_state == 0 and plc_run_value == 1:
+                            # PRIDANÉ: Logovanie reinicializácie
+                            _LOGGER.info("PLC restart detected (__PLC_RUN: 0 -> 1). Reloading integration...")
+                            # ZMENA: 2s oneskorenie pre stabilitu
                             await asyncio.sleep(2)
                             await self._reload_variables()
                             if self._restart_callback:
@@ -261,7 +244,9 @@ class PLCComSClient:
                 if cb:
                     cb(value_stripped)
 
-            except Exception:
+            except Exception as e:
+                # PRIDANÉ: Logovanie chyby pripojenia
+                _LOGGER.error("Connection error: %s. Retrying in %ss", e, delay)
                 await asyncio.sleep(delay)
                 delay = min(int(delay * 1.6), RECONNECT_MAX_DELAY)
                 self._connected = False

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from homeassistant.components.cover import (
+    CoverDeviceClass,
     CoverEntity,
     CoverEntityFeature,
-    CoverDeviceClass,
 )
 
-from .const import DOMAIN, COVER_BASE
+from .const import COVER_BASE, DOMAIN
 
 
 def _discover_covers(client):
@@ -53,7 +53,16 @@ async def async_setup_entry(hass, entry, async_add_entities):
         except Exception:
             continue
 
-        entities.append(TecomatCover(name, client, plc_base, base, initial_pos, entry.entry_id))
+        entities.append(
+            TecomatCover(
+                name,
+                client,
+                plc_base,
+                base,
+                initial_pos,
+                entry.entry_id,
+            )
+        )
 
     async_add_entities(entities)
 
@@ -72,7 +81,9 @@ class TecomatCover(CoverEntity):
 
         self._attr_unique_id = f"{DOMAIN}:{plc_base}_opener"
         self._attr_current_cover_position = initial_pos
+        self._last_position = initial_pos
         self._is_moving = False
+        self._direction: str | None = None
 
         self._attr_device_info = {"identifiers": {(DOMAIN, entry_id)}}
 
@@ -99,36 +110,68 @@ class TecomatCover(CoverEntity):
 
     @property
     def is_opening(self) -> bool:
-        return self._is_moving and (self._attr_current_cover_position or 0) < 99
+        return self._is_moving and self._direction == "opening"
 
     @property
     def is_closing(self) -> bool:
-        return self._is_moving and (self._attr_current_cover_position or 0) > 1
+        return self._is_moving and self._direction == "closing"
 
     def _on_diff_pos(self, value):
         try:
-            self._attr_current_cover_position = int(float((value or "").strip().replace(",", ".")))
-            self.async_write_ha_state()
+            new_position = int(float((value or "").strip().replace(",", ".")))
         except (ValueError, TypeError):
-            pass
+            return
+
+        # The target variable is write-only. Position changes therefore also
+        # determine the direction when the cover is operated outside HA.
+        if self._last_position is not None:
+            if new_position > self._last_position:
+                self._direction = "opening"
+            elif new_position < self._last_position:
+                self._direction = "closing"
+
+        self._last_position = new_position
+        self._attr_current_cover_position = new_position
+        self.async_write_ha_state()
 
     def _on_diff_moving(self, value):
-        self._is_moving = (value or "").strip() in ("1", "true", "TRUE")
+        self._is_moving = (value or "").strip().lower() in ("1", "true")
+        if not self._is_moving:
+            self._direction = None
         self.async_write_ha_state()
 
     async def async_open_cover(self, **kwargs):
+        self._direction = "opening"
+        self.async_write_ha_state()
         await self._client.async_set(self._target_var, "100")
 
     async def async_close_cover(self, **kwargs):
+        self._direction = "closing"
+        self.async_write_ha_state()
         await self._client.async_set(self._target_var, "0")
 
     async def async_set_cover_position(self, **kwargs):
-        pos = int(kwargs.get("position", 0))
-        pos = max(0, min(100, pos))
+        pos = max(0, min(100, int(kwargs.get("position", 0))))
+        current = self._attr_current_cover_position
+
+        if current is not None:
+            if pos > current:
+                self._direction = "opening"
+            elif pos < current:
+                self._direction = "closing"
+            else:
+                self._direction = None
+
+        self.async_write_ha_state()
         await self._client.async_set(self._target_var, str(pos))
 
     async def async_stop_cover(self, **kwargs):
-        await self._client.async_set(self._target_var, str(self._attr_current_cover_position or 0))
+        self._direction = None
+        self.async_write_ha_state()
+        await self._client.async_set(
+            self._target_var,
+            str(self._attr_current_cover_position or 0),
+        )
 
     async def async_will_remove_from_hass(self) -> None:
         self._client.unregister_value_entity(self._current_var)

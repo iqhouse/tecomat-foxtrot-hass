@@ -1,0 +1,18 @@
+CHANGELOG - Tecomat Foxtrot Integration
+
+v1.0.2 (2026-08-20)
+-------------------
+- OPRAVENÉ: Zobrazovanie smeru chodu žalúzie.
+
+v1.0.1 (2026-02-06)
+-------------------
+- PRIDANÉ: Logovanie reinicializácie - záznam do HA logu pri detekcii reštartu PLC.
+- PRIDANÉ: Automatický reload integrácie pri prechode __PLC_RUN z 0 na 1.
+- ZMENA: Optimalizácia stability - 2s oneskorenie pred opätovným načítaním zoznamu premenných.
+
+v1.0.0 (2026-01-20)
+-------------------
+- Produkčná verzia - prvé oficiálne vydanie.
+- Podpora pre PLCComS protokol a asynchrónnu komunikáciu.
+- Automatické vyhľadávanie entít (Senzory, Svetlá, Žalúzie, HVAC).
+- Implementácia dávkového načítania hodnôt (Prefetch) pri štarte.

@@ -1,5 +1,9 @@
 CHANGELOG - Tecomat Foxtrot Integration
 
+v1.0.3 (2026-09-04)
+-------------------
+- OPRAVENÉ: Opravené prepínanie režimov HVAC medzi HEAT a COOL pri kombinovaných termostatoch.
+
 v1.0.2 (2026-08-20)
 -------------------
 - OPRAVENÉ: Zobrazovanie smeru chodu žalúzie.

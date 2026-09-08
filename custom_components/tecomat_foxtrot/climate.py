@@ -263,9 +263,11 @@ class TecomatThermostat(ClimateEntity):
             self._attr_hvac_mode = HVACMode.HEAT if state else HVACMode.OFF
         else:
             self._cool_mode_state = state
-            if self._attr_hvac_mode == HVACMode.OFF and state:
+            if state:
                 self._attr_hvac_mode = HVACMode.COOL
-            elif not state and not self._heat_mode_state:
+            elif self._heat_mode_state:
+                self._attr_hvac_mode = HVACMode.HEAT
+            else:
                 self._attr_hvac_mode = HVACMode.OFF
 
         if self._type == 3:
@@ -287,9 +289,11 @@ class TecomatThermostat(ClimateEntity):
 
     def _on_diff_heatmode(self, value):
         self._heat_mode_state = (value or "").strip() in ("1", "true", "TRUE")
-        if self._attr_hvac_mode == HVACMode.OFF and self._heat_mode_state:
+        if self._heat_mode_state:
             self._attr_hvac_mode = HVACMode.HEAT
-        elif not self._heat_mode_state and not self._cool_mode_state:
+        elif self._cool_mode_state:
+            self._attr_hvac_mode = HVACMode.COOL
+        else:
             self._attr_hvac_mode = HVACMode.OFF
         self._update_hvac_action()
         self.async_write_ha_state()

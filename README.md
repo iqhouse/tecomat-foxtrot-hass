@@ -1,7 +1,7 @@
 # Tecomat Foxtrot pre Home Assistant
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
-[![Version](https://img.shields.io/badge/version-v1.0.3-blue.svg)](https://github.com/iqhouse/tecomat-foxtrot-hass/releases)
+[![Version](https://img.shields.io/badge/version-v1.0.4-blue.svg)](https://github.com/iqhouse/tecomat-foxtrot-hass/releases)
 
 Moderná integrácia pre PLC **Tecomat Foxtrot** využívajúca protokol **PLCComS**. Navrhnutá pre vysoký výkon, stabilitu a okamžitú odozvu v slovenskom a českom prostredí.
 

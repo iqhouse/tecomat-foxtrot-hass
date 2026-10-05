@@ -237,7 +237,7 @@ class TecomatLight(LightEntity):
 
         self._state_var = self._client.resolve_var(f"{base}_onoff")
         self._dimlevel_var = self._client.resolve_var(dimlevel_var or f"{base}_dimlevel")
-        self._tgtlevel_var = self._client.resolve_var(tgtlevel_var or f"{base}_tgtlevel")
+        self._tgtlevel_var = self._client.resolve_var(tgtlevel_var) if tgtlevel_var else None
         self._rgb_var = self._client.resolve_var(rgb_var or f"{base}_rgb")
         self._temp_var = self._client.resolve_var(temp_var or f"{base}_colortemp")
 
@@ -344,7 +344,7 @@ class TecomatLight(LightEntity):
                 return
 
             self._last_brightness = brightness
-            target_v = self._tgtlevel_var if self._dimtype == 0 else self._dimlevel_var
+            target_v = self._tgtlevel_var or self._dimlevel_var
             await self._client.async_set(target_v, f"{dim_pct:.1f}")
 
         if ATTR_COLOR_TEMP_KELVIN in kwargs:

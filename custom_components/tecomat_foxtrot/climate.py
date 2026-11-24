@@ -13,6 +13,15 @@ from homeassistant.config_entries import ConfigEntry
 from .const import DOMAIN, THERMOSTAT_BASE
 
 
+# HA Core 2026.11 introduced native climate temperature attributes.
+_TEMP_ATTR_PREFIX = (
+    "_attr_native_" if hasattr(ClimateEntity, "native_temperature_unit") else "_attr_"
+)
+_TEMPERATURE_UNIT_ATTR = _TEMP_ATTR_PREFIX + "temperature_unit"
+_TARGET_TEMPERATURE_ATTR = _TEMP_ATTR_PREFIX + "target_temperature"
+_CURRENT_TEMPERATURE_ATTR = _TEMP_ATTR_PREFIX + "current_temperature"
+
+
 def _safe_int(s: str, default: int = 0) -> int:
     try:
         return int((s or "").strip())
@@ -171,9 +180,9 @@ class TecomatThermostat(ClimateEntity):
         self._attr_unique_id = f"{DOMAIN}:{plc_base}_thermostat"
         self._attr_device_info = {"identifiers": {(DOMAIN, entry_id)}}
 
-        self._attr_temperature_unit = UnitOfTemperature.CELSIUS
-        self._attr_target_temperature = target
-        self._attr_current_temperature = current
+        setattr(self, _TEMPERATURE_UNIT_ATTR, UnitOfTemperature.CELSIUS)
+        setattr(self, _TARGET_TEMPERATURE_ATTR, target)
+        setattr(self, _CURRENT_TEMPERATURE_ATTR, current)
         self._attr_min_temp = min_t
         self._attr_max_temp = max_t
 
@@ -242,14 +251,14 @@ class TecomatThermostat(ClimateEntity):
 
     def _on_diff_setpoint(self, value):
         try:
-            self._attr_target_temperature = float((value or "").replace(",", "."))
+            setattr(self, _TARGET_TEMPERATURE_ATTR, float((value or "").replace(",", ".")))
             self.async_write_ha_state()
         except Exception:
             pass
 
     def _on_diff_meas(self, value):
         try:
-            self._attr_current_temperature = float((value or "").replace(",", "."))
+            setattr(self, _CURRENT_TEMPERATURE_ATTR, float((value or "").replace(",", ".")))
             self.async_write_ha_state()
         except Exception:
             pass

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from contextlib import suppress
 from typing import Callable
 
 from .const import (
@@ -68,14 +69,15 @@ class PLCComSClient:
     async def async_disconnect(self) -> None:
         self.stop()
         if self._task:
-            try:
+            self._task.cancel()
+            with suppress(asyncio.CancelledError):
                 await self._task
-            except Exception:
-                pass
+            self._task = None
 
         if self.writer:
             self.writer.close()
-            await self.writer.wait_closed()
+            with suppress(OSError):
+                await self.writer.wait_closed()
 
         self.reader = None
         self.writer = None
@@ -207,6 +209,9 @@ class PLCComSClient:
                 if not self._connected:
                     await self.async_connect()
                     delay = RECONNECT_MIN_DELAY
+                    if self._restart_callback:
+                        self.hass.async_create_task(self._restart_callback())
+                        return
 
                 if not self._subscribed:
                     await self.async_subscribe()
@@ -233,9 +238,9 @@ class PLCComSClient:
                             _LOGGER.info("PLC restart detected (__PLC_RUN: 0 -> 1). Reloading integration...")
                             # ZMENA: 2s oneskorenie pre stabilitu
                             await asyncio.sleep(2)
-                            await self._reload_variables()
                             if self._restart_callback:
                                 self.hass.async_create_task(self._restart_callback())
+                                return
                         self._plc_run_state = plc_run_value
                     except (ValueError, TypeError):
                         pass
@@ -249,12 +254,9 @@ class PLCComSClient:
                 _LOGGER.error("Connection error: %s. Retrying in %ss", e, delay)
                 await asyncio.sleep(delay)
                 delay = min(int(delay * 1.6), RECONNECT_MAX_DELAY)
+                if self.writer:
+                    self.writer.close()
+                    with suppress(OSError):
+                        await self.writer.wait_closed()
                 self._connected = False
                 self._subscribed = False
-
-    async def _reload_variables(self) -> None:
-        try:
-            await self._send("LIST:")
-            await self._read_list()
-        except Exception:
-            pass

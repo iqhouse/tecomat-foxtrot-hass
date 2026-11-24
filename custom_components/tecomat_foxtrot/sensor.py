@@ -131,11 +131,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
     async_add_entities(entities)
 
-    # event senzory (button counters)
-    from .event import async_setup_entry as async_setup_event_entry
-    await async_setup_event_entry(hass, entry, async_add_entities)
-
-
 class _TecomatRealPushSensor(SensorEntity):
     _ROUND_N: int | None = None
     _attr_should_poll = False

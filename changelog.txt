@@ -1,5 +1,19 @@
 CHANGELOG - Tecomat Foxtrot Integration
 
+v1.2.0 (2026-11-24)
+-------------------
+- PRIDANÉ: Tlačidlové EventEntity pre jednoduché automatizácie typu Click a Press.
+
+v1.1.0 (2026-11-12)
+-------------------
+- PRIDANÉ: Podpora žalúzií fbHASS_iJalousie (typ 10) v Home Assistante. Jedna entita zobrazuje a nastavuje výšku aj náklon lamiel.
+- PRIDANÉ: Samostatný povel STOP pre pohyb výšky aj náklonu cez PLCComS.
+- PRIDANÉ: Referenčný dojazd po reštarte PLC priamo z Home Assistanta povelom na výšku 100 %. Do dokončenia dojazdu sa poloha zobrazuje ako neznáma.
+- OPRAVENÉ: Obnova spojenia s PLC a opätovné načítanie integrácie po reštarte PLC alebo výpadku spojenia.
+- OPRAVENÉ: Kompatibilita termostatov s teplotnými atribútmi Home Assistant Core 2026.11. Staršie verzie HA používajú pôvodné atribúty.
+
+Ovládanie žalúzií vyžaduje blok fbHASS_iJalousie v PLC.
+
 v1.0.4 (2026-10-05)
 -------------------
 - OPRAVENÉ: Opravená regulácia intenzity pri fb_iDimmerLED.

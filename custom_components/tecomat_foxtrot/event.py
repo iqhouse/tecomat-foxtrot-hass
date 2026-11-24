@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
+import logging
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.components.sensor import SensorEntity, SensorStateClass
+from homeassistant.components.event import EventEntity
 from .const import DOMAIN, BUTTON_BASE
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def _slugify_plc_id(plc_id: str) -> str:
@@ -17,7 +19,8 @@ def _slugify_plc_id(plc_id: str) -> str:
 
 def _to_int(raw: str) -> int:
     try:
-        return int((raw or "").strip())
+        text = str(raw or "").strip().replace(",", ".")
+        return int(float(text))
     except (ValueError, TypeError):
         return 0
 
@@ -62,6 +65,16 @@ def get_required_var_names(client) -> list[str]:
     return out
 
 
+def _is_numeric_like(value: str) -> bool:
+    if not value or not str(value).strip():
+        return True
+    try:
+        float(str(value).strip().replace(",", "."))
+        return True
+    except ValueError:
+        return False
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities):
     entry_data = hass.data[DOMAIN][entry.entry_id]
     client = entry_data["client"]
@@ -86,36 +99,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         if not name:
             name = plc_base
 
-        entities.append(TecomatButtonSensor(
+        if _is_numeric_like(name):
+            name = plc_base
+
+        entities.append(TecomatButtonEvent(
             hass=hass,
-            name=f"{name} Click",
+            name=name,
             client=client,
             plc_base=plc_base,
-            counter_var=rec["click"],
-            initial_count=_to_int(click_raw),
+            click_counter_var=rec["click"],
+            press_counter_var=rec["press"],
+            initial_click_count=_to_int(click_raw),
+            initial_press_count=_to_int(press_raw),
             entry_id=entry_id,
-            suggested_entity_id=f"sensor.{slug}_click",
-            sensor_type="click",
-        ))
-        entities.append(TecomatButtonSensor(
-            hass=hass,
-            name=f"{name} Press",
-            client=client,
-            plc_base=plc_base,
-            counter_var=rec["press"],
-            initial_count=_to_int(press_raw),
-            entry_id=entry_id,
-            suggested_entity_id=f"sensor.{slug}_press",
-            sensor_type="press",
+            suggested_entity_id=f"event.{slug}",
         ))
 
     if entities:
         async_add_entities(entities)
 
 
-class TecomatButtonSensor(SensorEntity):
+class TecomatButtonEvent(EventEntity):
     _attr_should_poll = False
-    _attr_state_class = SensorStateClass.TOTAL
+    _attr_event_types = ["click", "press"]
 
     def __init__(
         self,
@@ -123,51 +129,104 @@ class TecomatButtonSensor(SensorEntity):
         name: str,
         client,
         plc_base: str,
-        counter_var: str,
-        initial_count: int,
+        click_counter_var: str,
+        press_counter_var: str,
+        initial_click_count: int,
+        initial_press_count: int,
         entry_id: str,
         suggested_entity_id: str,
-        sensor_type: str,
     ):
         self.hass = hass
         self._attr_name = name
         self._client = client
         self._plc_base = plc_base
-        self._counter_var = counter_var
-        self._sensor_type = sensor_type
+        self._click_counter_var = self._client.resolve_var(click_counter_var)
+        self._press_counter_var = self._client.resolve_var(press_counter_var)
+        self._prev_click_count = int(initial_click_count or 0)
+        self._prev_press_count = int(initial_press_count or 0)
 
-        self._attr_unique_id = f"{DOMAIN}:{entry_id}:{plc_base}_{sensor_type}"  # ponechané
+        self._attr_unique_id = f"{DOMAIN}:{entry_id}:{plc_base}"
         self.entity_id = suggested_entity_id
         self._attr_device_info = {"identifiers": {(DOMAIN, entry_id)}}
 
-        self._prev_count = int(initial_count or 0)
-        self._attr_native_value = int(initial_count or 0)
-        self._last_change_time = None
-
-        self._client.register_value_entity(self._counter_var, self._on_count_change)
+        self._client.register_value_entity(
+            self._click_counter_var,
+            self._on_click_count_change,
+        )
+        self._client.register_value_entity(
+            self._press_counter_var,
+            self._on_press_count_change,
+        )
 
     async def async_will_remove_from_hass(self) -> None:
-        self._client.unregister_value_entity(self._counter_var)
+        self._client.unregister_value_entity(self._click_counter_var)
+        self._client.unregister_value_entity(self._press_counter_var)
 
-    def _on_count_change(self, raw_value: str) -> None:
+    def _on_click_count_change(self, raw_value: str) -> None:
+        self._handle_count_change(
+            raw_value,
+            event_type="click",
+            previous_count_attr="_prev_click_count",
+        )
+
+    def _on_press_count_change(self, raw_value: str) -> None:
+        self._handle_count_change(
+            raw_value,
+            event_type="press",
+            previous_count_attr="_prev_press_count",
+        )
+
+    def _handle_count_change(
+        self,
+        raw_value: str,
+        event_type: str,
+        previous_count_attr: str,
+    ) -> None:
         try:
             new_count = _to_int(raw_value)
-            if new_count != self._prev_count:
-                self._attr_native_value = new_count
-                if new_count > self._prev_count:
-                    self._last_change_time = datetime.now()
-                self._prev_count = new_count
+            previous_count = getattr(self, previous_count_attr)
+
+            count_increased = new_count > previous_count
+            pulse_started = previous_count == 0 and new_count > 0
+            counter_wrapped = previous_count > 0 and new_count == 0
+
+            if count_increased or pulse_started:
+                setattr(self, previous_count_attr, new_count)
+                event_attributes = {
+                    "count": new_count,
+                    "plc_base": self._plc_base,
+                }
+                self._trigger_event(event_type, event_attributes)
+                self._attr_event_type = event_type
+                self._attr_event_attributes = event_attributes
                 self.async_write_ha_state()
-        except Exception:
-            pass
+                self.hass.bus.async_fire(
+                    "tecomat_foxtrot_button",
+                    {
+                        "entity_id": self.entity_id,
+                        "event_type": event_type,
+                        **event_attributes,
+                    },
+                )
+                return
+            if counter_wrapped:
+                setattr(self, previous_count_attr, new_count)
+                return
+            setattr(self, previous_count_attr, new_count)
+        except (ValueError, TypeError) as err:
+            _LOGGER.warning(
+                "Invalid %s counter value for button %s: %r (%s)",
+                event_type,
+                self._plc_base,
+                raw_value,
+                err,
+            )
+            return
 
     @property
     def extra_state_attributes(self):
-        attrs = {
+        return {
             "plc_base": self._plc_base,
-            "sensor_type": self._sensor_type,
-            "count": self._attr_native_value,
+            "click_count": self._prev_click_count,
+            "press_count": self._prev_press_count,
         }
-        if self._last_change_time:
-            attrs["last_change"] = self._last_change_time.isoformat()
-        return attrs

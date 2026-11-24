@@ -3,7 +3,7 @@ CONF_HOST = "host"
 CONF_PORT = "port"
 DEFAULT_PORT = 5010
 
-PLATFORMS = ["sensor", "binary_sensor", "switch", "light", "cover", "climate"]
+PLATFORMS = ["sensor", "binary_sensor", "switch", "light", "cover", "climate", "event"]
 
 SENSOR_DISPLAY_TYPE_REAL = 1
 SENSOR_DISPLAY_SYMBOL_GENERIC = 0

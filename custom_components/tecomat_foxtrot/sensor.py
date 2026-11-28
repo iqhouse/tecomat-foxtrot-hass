@@ -136,7 +136,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     # same DIFF callback as the climate entity. No additional PLC reads are made.
     climate_values = entry_data.get("initial_values_climate") or []
     climate_idx = 0
-    available_variables = {var.lower() for var in client.variables}
 
     for type_var, base, plc_base in _discover_thermostats(client):
         if climate_idx + 10 > len(climate_values):
@@ -152,11 +151,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         if climate_type not in (1, 2, 3):
             continue
 
-        meastemp_var = client.resolve_var(f"{base}_meastemp")
-        if meastemp_var.lower() not in available_variables:
-            continue
-
         climate_name = (chunk[1] or "").strip() or plc_base
+        meastemp_var = client.resolve_var(f"{base}_meastemp")
         entities.append(
             TecomatClimateTemperatureSensor(
                 name=f"{climate_name} temperature",
@@ -234,7 +230,7 @@ class TecomatClimateTemperatureSensor(SensorEntity):
         self._client = client
         self._value_var = client.resolve_var(value_var)
         self._attr_unique_id = f"{DOMAIN}:{entry_id}:{plc_base}_thermostat_temperature"
-        self.entity_id = f"sensor.{slugify(climate_name)}_temperature"
+        self.entity_id = f"sensor.{slugify(plc_base)}_temperature"
         self._attr_device_info = {"identifiers": {(DOMAIN, entry_id)}}
 
         initial_temperature = _parse_temperature(initial_value)

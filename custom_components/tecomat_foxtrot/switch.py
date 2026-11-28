@@ -133,4 +133,4 @@ class TecomatSwitch(SwitchEntity):
         await self._client.async_set(self._state_var, "0")
 
     async def async_will_remove_from_hass(self) -> None:
-        self._client.unregister_value_entity(self._state_var)
+        self._client.unregister_value_entity(self._state_var, self._on_diff_value)

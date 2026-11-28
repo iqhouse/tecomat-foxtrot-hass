@@ -31,7 +31,8 @@ class PLCComSClient:
         self.variables: list[str] = []
         self._var_map: dict[str, str] = {}  # lower(var)->real var from LIST
 
-        self._diff_callbacks: dict[str, ValueCallback] = {}
+        self._diff_callbacks: dict[str, set[ValueCallback]] = {}
+        self._connection_callbacks: set[Callable[[bool], None]] = set()
         self._restart_callback: RestartCallback | None = None
 
         self._io_lock = asyncio.Lock()
@@ -65,6 +66,7 @@ class PLCComSClient:
 
         await self._send("LIST:")
         await self._read_list()
+        self._notify_connection(True)
 
     async def async_disconnect(self) -> None:
         self.stop()
@@ -95,11 +97,30 @@ class PLCComSClient:
 
     def register_value_entity(self, var_name: str, callback: ValueCallback) -> None:
         real = self.resolve_var(var_name)
-        self._diff_callbacks[real.lower()] = callback
+        self._diff_callbacks.setdefault(real.lower(), set()).add(callback)
 
-    def unregister_value_entity(self, var_name: str) -> None:
+    def unregister_value_entity(self, var_name: str, callback: ValueCallback | None = None) -> None:
         real = self.resolve_var(var_name)
-        self._diff_callbacks.pop(real.lower(), None)
+        key = real.lower()
+        if callback is None:
+            self._diff_callbacks.pop(key, None)
+            return
+        callbacks = self._diff_callbacks.get(key)
+        if callbacks is None:
+            return
+        callbacks.discard(callback)
+        if not callbacks:
+            self._diff_callbacks.pop(key, None)
+
+    def register_connection_callback(self, callback: Callable[[bool], None]) -> None:
+        self._connection_callbacks.add(callback)
+
+    def unregister_connection_callback(self, callback: Callable[[bool], None]) -> None:
+        self._connection_callbacks.discard(callback)
+
+    def _notify_connection(self, connected: bool) -> None:
+        for callback in tuple(self._connection_callbacks):
+            callback(connected)
 
     def register_restart_callback(self, callback: RestartCallback) -> None:
         self._restart_callback = callback
@@ -245,13 +266,15 @@ class PLCComSClient:
                     except (ValueError, TypeError):
                         pass
 
-                cb = self._diff_callbacks.get(var_lower)
-                if cb:
-                    cb(value_stripped)
+                callbacks = self._diff_callbacks.get(var_lower)
+                if callbacks:
+                    for cb in tuple(callbacks):
+                        cb(value_stripped)
 
             except Exception as e:
                 # PRIDANÉ: Logovanie chyby pripojenia
                 _LOGGER.error("Connection error: %s. Retrying in %ss", e, delay)
+                self._notify_connection(False)
                 await asyncio.sleep(delay)
                 delay = min(int(delay * 1.6), RECONNECT_MAX_DELAY)
                 if self.writer:

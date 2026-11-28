@@ -159,8 +159,8 @@ class TecomatButtonEvent(EventEntity):
         )
 
     async def async_will_remove_from_hass(self) -> None:
-        self._client.unregister_value_entity(self._click_counter_var)
-        self._client.unregister_value_entity(self._press_counter_var)
+        self._client.unregister_value_entity(self._click_counter_var, self._on_click_count_change)
+        self._client.unregister_value_entity(self._press_counter_var, self._on_press_count_change)
 
     def _on_click_count_change(self, raw_value: str) -> None:
         self._handle_count_change(

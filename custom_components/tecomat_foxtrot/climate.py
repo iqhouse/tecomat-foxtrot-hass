@@ -334,10 +334,10 @@ class TecomatThermostat(ClimateEntity):
                 await self._client.async_set(self._heatmode_var, "1")
 
     async def async_will_remove_from_hass(self) -> None:
-        self._client.unregister_value_entity(self._setpoint_var)
-        self._client.unregister_value_entity(self._meastemp_var)
-        self._client.unregister_value_entity(self._mode_var)
-        self._client.unregister_value_entity(self._active_var)
+        self._client.unregister_value_entity(self._setpoint_var, self._on_diff_setpoint)
+        self._client.unregister_value_entity(self._meastemp_var, self._on_diff_meas)
+        self._client.unregister_value_entity(self._mode_var, self._on_diff_mode)
+        self._client.unregister_value_entity(self._active_var, self._on_diff_active)
         if self._type == 3:
-            self._client.unregister_value_entity(self._heatmode_var)
-            self._client.unregister_value_entity(self._heat_var)
+            self._client.unregister_value_entity(self._heatmode_var, self._on_diff_heatmode)
+            self._client.unregister_value_entity(self._heat_var, self._on_diff_heat)

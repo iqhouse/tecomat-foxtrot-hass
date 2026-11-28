@@ -1,5 +1,11 @@
 CHANGELOG - Tecomat Foxtrot Integration
 
+v1.2.1 (2026-11-28)
+-------------------
+- PRIDANÉ: Automatické teplotné senzory pre entity climate. Pre každý termostat sa vytvorí samostatný senzor nameranej teploty miestnosti, predvolene deaktivovaný v registri entít.
+- ZMENA: Teplotné senzory používajú existujúci zdroj dát climate entity, aktualizujú sa cez existujúci DIFF mechanizmus a nezvyšujú komunikačné zaťaženie PLC.
+- OPRAVENÉ: Jedna PLC premenná môže teraz aktualizovať viacero entít súčasne bez straty callbackov pri unload alebo reload integrácie.
+
 v1.2.0 (2026-11-24)
 -------------------
 - PRIDANÉ: Tlačidlové EventEntity pre jednoduché automatizácie typu Click a Press.

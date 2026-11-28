@@ -297,9 +297,9 @@ class TecomatCover(CoverEntity):
         )
 
     async def async_will_remove_from_hass(self) -> None:
-        self._client.unregister_value_entity(self._current_var)
-        self._client.unregister_value_entity(self._moving_var)
+        self._client.unregister_value_entity(self._current_var, self._on_diff_pos)
+        self._client.unregister_value_entity(self._moving_var, self._on_diff_moving)
         if self._tilt_current_var:
-            self._client.unregister_value_entity(self._tilt_current_var)
+            self._client.unregister_value_entity(self._tilt_current_var, self._on_diff_tilt)
         if self._referenced_var:
-            self._client.unregister_value_entity(self._referenced_var)
+            self._client.unregister_value_entity(self._referenced_var, self._on_diff_referenced)

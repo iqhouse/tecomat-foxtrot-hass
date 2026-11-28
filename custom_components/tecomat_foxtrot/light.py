@@ -283,13 +283,13 @@ class TecomatLight(LightEntity):
                 self._client.register_value_entity(self._temp_var, self._on_diff_temp)
 
     async def async_will_remove_from_hass(self) -> None:
-        self._client.unregister_value_entity(self._state_var)
+        self._client.unregister_value_entity(self._state_var, self._on_diff_state)
         if self._is_dimmable:
-            self._client.unregister_value_entity(self._dimlevel_var)
+            self._client.unregister_value_entity(self._dimlevel_var, self._on_diff_dim)
             if self._dimtype == 1:
-                self._client.unregister_value_entity(self._rgb_var)
+                self._client.unregister_value_entity(self._rgb_var, self._on_diff_rgb)
             elif self._dimtype == 2:
-                self._client.unregister_value_entity(self._temp_var)
+                self._client.unregister_value_entity(self._temp_var, self._on_diff_temp)
 
     def _on_diff_state(self, value: str) -> None:
         new_state = _is_truthy(value)

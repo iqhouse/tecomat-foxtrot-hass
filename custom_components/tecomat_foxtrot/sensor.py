@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import math
 import re
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.util import slugify
 
 from .const import (
     DOMAIN, DISP, SENSOR_DISPLAY_SYMBOL_LUX, SENSOR_DISPLAY_SYMBOL_CO2,
@@ -12,6 +14,7 @@ from .const import (
     SENSOR_DISPLAY_SYMBOL_HUMIDITY, SENSOR_DISPLAY_SYMBOL_GENERIC,
     SENSOR_DISPLAY_TYPE_REAL,
 )
+from .climate import _discover_thermostats
 
 
 def _to_float(raw: str) -> float:
@@ -129,6 +132,43 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         elif symbol == SENSOR_DISPLAY_SYMBOL_CO:
             entities.append(TecomatCOSensor(**common_args))
 
+    # Climate temperature sensors use the same prefetched climate values and the
+    # same DIFF callback as the climate entity. No additional PLC reads are made.
+    climate_values = entry_data.get("initial_values_climate") or []
+    climate_idx = 0
+    available_variables = {var.lower() for var in client.variables}
+
+    for type_var, base, plc_base in _discover_thermostats(client):
+        if climate_idx + 10 > len(climate_values):
+            break
+
+        chunk = climate_values[climate_idx : climate_idx + 10]
+        climate_idx += 10
+
+        try:
+            climate_type = int(_to_float(chunk[0]))
+        except Exception:
+            climate_type = -1
+        if climate_type not in (1, 2, 3):
+            continue
+
+        meastemp_var = client.resolve_var(f"{base}_meastemp")
+        if meastemp_var.lower() not in available_variables:
+            continue
+
+        climate_name = (chunk[1] or "").strip() or plc_base
+        entities.append(
+            TecomatClimateTemperatureSensor(
+                name=f"{climate_name} temperature",
+                climate_name=climate_name,
+                client=client,
+                plc_base=plc_base,
+                value_var=meastemp_var,
+                initial_value=chunk[2],
+                entry_id=entry.entry_id,
+            )
+        )
+
     async_add_entities(entities)
 
 class _TecomatRealPushSensor(SensorEntity):
@@ -148,7 +188,7 @@ class _TecomatRealPushSensor(SensorEntity):
         self._client.register_value_entity(self._value_var, self._on_diff_value)
 
     async def async_will_remove_from_hass(self) -> None:
-        self._client.unregister_value_entity(self._value_var)
+        self._client.unregister_value_entity(self._value_var, self._on_diff_value)
 
     def _on_diff_value(self, raw_value: str) -> None:
         try:
@@ -157,6 +197,73 @@ class _TecomatRealPushSensor(SensorEntity):
             self.async_write_ha_state()
         except Exception:
             pass
+
+
+def _parse_temperature(raw_value) -> float | None:
+    if raw_value is None:
+        return None
+    text = str(raw_value).strip().replace(",", ".")
+    if not text:
+        return None
+    try:
+        value = float(text)
+    except (TypeError, ValueError):
+        return None
+    return value if math.isfinite(value) else None
+
+
+class TecomatClimateTemperatureSensor(SensorEntity):
+    _attr_should_poll = False
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+    _attr_entity_registry_enabled_default = False
+    _attr_has_entity_name = False
+
+    def __init__(
+        self,
+        name: str,
+        climate_name: str,
+        client,
+        plc_base: str,
+        value_var: str,
+        initial_value,
+        entry_id: str,
+    ):
+        self._attr_name = name
+        self._client = client
+        self._value_var = client.resolve_var(value_var)
+        self._attr_unique_id = f"{DOMAIN}:{entry_id}:{plc_base}_thermostat_temperature"
+        self.entity_id = f"sensor.{slugify(climate_name)}_temperature"
+        self._attr_device_info = {"identifiers": {(DOMAIN, entry_id)}}
+
+        initial_temperature = _parse_temperature(initial_value)
+        self._has_valid_value = initial_temperature is not None
+        self._attr_native_value = initial_temperature
+        self._attr_available = self._has_valid_value
+
+        self._client.register_value_entity(self._value_var, self._on_diff_value)
+        self._client.register_connection_callback(self._on_connection_change)
+
+    def _on_diff_value(self, raw_value: str) -> None:
+        temperature = _parse_temperature(raw_value)
+        if temperature is None:
+            self._has_valid_value = False
+            self._attr_native_value = None
+            self._attr_available = False
+        else:
+            self._has_valid_value = True
+            self._attr_native_value = temperature
+            self._attr_available = True
+        self.async_write_ha_state()
+
+    def _on_connection_change(self, connected: bool) -> None:
+        self._attr_available = connected and self._has_valid_value
+        self.async_write_ha_state()
+
+    async def async_will_remove_from_hass(self) -> None:
+        self._client.unregister_value_entity(self._value_var, self._on_diff_value)
+        self._client.unregister_connection_callback(self._on_connection_change)
 
 
 class TecomatTemperatureSensor(_TecomatRealPushSensor):
@@ -214,7 +321,7 @@ class TecomatGenericDisplaySensor(SensorEntity):
         self._client.register_value_entity(self._value_var, self._on_diff_value)
 
     async def async_will_remove_from_hass(self) -> None:
-        self._client.unregister_value_entity(self._value_var)
+        self._client.unregister_value_entity(self._value_var, self._on_diff_value)
 
     def _on_diff_value(self, raw_value: str) -> None:
         try:

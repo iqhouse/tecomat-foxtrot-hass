@@ -110,4 +110,4 @@ class TecomatBinarySensor(BinarySensorEntity):
         self.async_write_ha_state()
 
     async def async_will_remove_from_hass(self) -> None:
-        self._client.unregister_value_entity(self._state_var)
+        self._client.unregister_value_entity(self._state_var, self._on_diff_value)
